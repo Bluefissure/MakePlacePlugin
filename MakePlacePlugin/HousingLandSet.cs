@@ -15,8 +15,8 @@ namespace MakePlacePlugin
 
         public override void PopulateData(RowParser parser, GameData data, Language language)
         {
-            RowId = parser.RowId;
-            SubRowId = parser.SubRowId;
+            RowId = parser.Row;
+            SubRowId = parser.SubRow;
 
             LandSets = parser.ReadStructuresAsArray<LandSet>(0, 60);
             UnknownRange = parser.ReadColumn<uint>(300);
