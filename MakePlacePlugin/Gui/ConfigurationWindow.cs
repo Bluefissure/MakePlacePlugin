@@ -53,20 +53,33 @@ namespace MakePlacePlugin.Gui
                     if (ImGui.CollapsingHeader("Interior Furniture", ImGuiTreeNodeFlags.DefaultOpen))
                     {
                         ImGui.PushID("interior");
-                        DrawItemList(Config.InteriorItemList);
+                        DrawItemList(Plugin.InteriorItemList);
                         ImGui.PopID();
                     }
                     if (ImGui.CollapsingHeader("Exterior Furniture", ImGuiTreeNodeFlags.DefaultOpen))
                     {
                         ImGui.PushID("exterior");
-                        DrawItemList(Config.ExteriorItemList);
+                        DrawItemList(Plugin.ExteriorItemList);
                         ImGui.PopID();
                     }
 
-                    if (ImGui.CollapsingHeader("Fixtures", ImGuiTreeNodeFlags.DefaultOpen))
+                    if (ImGui.CollapsingHeader("Interior Fixtures", ImGuiTreeNodeFlags.DefaultOpen))
                     {
-                        ImGui.PushID("fixture");
-                        DrawFixtureList();
+                        ImGui.PushID("interiorFixture");
+                        DrawFixtureList(Plugin.Layout.interiorFixture);
+                        ImGui.PopID();
+                    }
+
+                    if (ImGui.CollapsingHeader("Exterior Fixtures", ImGuiTreeNodeFlags.DefaultOpen))
+                    {
+                        ImGui.PushID("exteriorFixture");
+                        DrawFixtureList(Plugin.Layout.exteriorFixture);
+                        ImGui.PopID();
+                    }
+                    if (ImGui.CollapsingHeader("Unused Furniture", ImGuiTreeNodeFlags.DefaultOpen))
+                    {
+                        ImGui.PushID("unused");
+                        DrawItemList(Plugin.UnusedItemList, true);
                         ImGui.PopID();
                     }
 
@@ -179,7 +192,7 @@ namespace MakePlacePlugin.Gui
                         SaveLayoutManager.ImportLayout(Config.SaveLocation);
                         Plugin.MatchLayout();
                         Config.ResetRecord();
-                        Log(String.Format("Imported {0} items", Config.InteriorItemList.Count + Config.ExteriorItemList.Count));
+                        Log(String.Format("Imported {0} items", Plugin.InteriorItemList.Count + Plugin.ExteriorItemList.Count));
                     }
                     catch (Exception e)
                     {
@@ -189,6 +202,29 @@ namespace MakePlacePlugin.Gui
             }
             if (Config.ShowTooltips && ImGui.IsItemHovered()) ImGui.SetTooltip("Load layout from file");
 
+            ImGui.Dummy(new Vector2(0, 15));
+
+            ImGui.Text("Selected Floors");
+
+            if (ImGui.Checkbox("Basement", ref Config.Basement))
+            {
+                Plugin.MatchLayout();
+                Config.Save();
+            }
+            ImGui.SameLine(); ImGui.Dummy(new Vector2(10, 0)); ImGui.SameLine();
+
+            if (ImGui.Checkbox("Ground Floor", ref Config.GroundFloor))
+            {
+                Plugin.MatchLayout();
+                Config.Save();
+            }
+            ImGui.SameLine(); ImGui.Dummy(new Vector2(10, 0)); ImGui.SameLine();
+
+            if (ImGui.Checkbox("Upper Floor", ref Config.UpperFloor))
+            {
+                Plugin.MatchLayout();
+                Config.Save();
+            }
 
             ImGui.Dummy(new Vector2(0, 15));
 
@@ -221,10 +257,17 @@ namespace MakePlacePlugin.Gui
 
             if (ImGui.Button($"Apply {inOut} Layout"))
             {
-                if (IsDecorMode() && MakePlacePlugin.IsRotateMode())
+                if (IsDecorMode() && IsRotateMode())
                 {
-                    Plugin.ApplyLayout();
-
+                    try
+                    {
+                        Plugin.MatchLayout();
+                        Plugin.ApplyLayout();
+                    }
+                    catch (Exception e)
+                    {
+                        LogError($"Error: {e.Message}", e.StackTrace);
+                    }
                 }
                 else
                 {
@@ -247,7 +290,7 @@ namespace MakePlacePlugin.Gui
 
         }
 
-        private void DrawRow(int i, HousingItem housingItem, int childIndex = -1)
+        private void DrawRow(int i, HousingItem housingItem, bool showSetPosition = true, int childIndex = -1)
         {
             ImGui.Text($"{housingItem.X:N3}, {housingItem.Y:N3}, {housingItem.Z:N3}"); ImGui.NextColumn();
             ImGui.Text($"{housingItem.Rotate:N3}"); ImGui.NextColumn();
@@ -271,32 +314,35 @@ namespace MakePlacePlugin.Gui
 
             }
             ImGui.NextColumn();
-            string uniqueID = childIndex == -1 ? i.ToString() : i.ToString() + "_" + childIndex.ToString();
 
-            if (housingItem.ItemStruct != IntPtr.Zero)
+            if (showSetPosition)
             {
+                string uniqueID = childIndex == -1 ? i.ToString() : i.ToString() + "_" + childIndex.ToString();
 
-                if (ImGui.Button("Set" + "##" + uniqueID))
+                if (housingItem.ItemStruct != IntPtr.Zero)
                 {
-                    SetItemPosition(housingItem);
-                }
-            }
-            else
-            {
-                //ImGui.NextColumn();
-            }
-            ImGui.NextColumn();
 
+                    if (ImGui.Button("Set" + "##" + uniqueID))
+                    {
+                        SetItemPosition(housingItem);
+                    }
+                }
+                else
+                {
+                    //ImGui.NextColumn();
+                }
+                ImGui.NextColumn();
+            }
 
 
         }
 
-        private void DrawFixtureList()
+        private void DrawFixtureList(List<Fixture> fixtureList)
         {
 
             try
             {
-                var fixtureList = Config.Layout.interiorFixture;
+
 
                 if (ImGui.Button("Clear"))
                 {
@@ -319,7 +365,7 @@ namespace MakePlacePlugin.Gui
                     ImGui.Text(fixture.type); ImGui.NextColumn();
 
 
-                    var item = Data.GetExcelSheet<Item>().FirstOrDefault(row => row.Name.ToString().Equals(fixture.name));
+                    var item = Data.GetExcelSheet<Item>().GetRow(fixture.itemId);
                     if (item != null)
                     {
                         DrawIcon(item.Icon, new Vector2(20, 20));
@@ -340,7 +386,7 @@ namespace MakePlacePlugin.Gui
 
         }
 
-        private void DrawItemList(List<HousingItem> itemList)
+        private void DrawItemList(List<HousingItem> itemList, bool isUnused = false)
         {
 
 
@@ -369,11 +415,15 @@ namespace MakePlacePlugin.Gui
                 itemList.Clear();
                 Config.Save();
             }
-            ImGui.SameLine();
-            ImGui.Text("Note: Missing items and incorrect dyes are grayed out");
+
+            if (!isUnused)
+            {
+                ImGui.SameLine();
+                ImGui.Text("Note: Missing items, incorrect dyes, and items on unselected floors are grayed out");
+            }
 
             // name, position, r, color, set
-            int columns = 5;
+            int columns = isUnused ? 4 : 5;
 
 
             ImGui.Columns(columns, "ItemList", true);
@@ -383,8 +433,10 @@ namespace MakePlacePlugin.Gui
             ImGui.Text("Rotation"); ImGui.NextColumn();
             ImGui.Text("Dye"); ImGui.NextColumn();
 
-            ImGui.Text("Set Position"); ImGui.NextColumn();
-
+            if (!isUnused)
+            {
+                ImGui.Text("Set Position"); ImGui.NextColumn();
+            }
 
             ImGui.Separator();
             for (int i = 0; i < itemList.Count(); i++)
@@ -409,7 +461,7 @@ namespace MakePlacePlugin.Gui
 
 
                 ImGui.NextColumn();
-                DrawRow(i, housingItem);
+                DrawRow(i, housingItem, !isUnused);
 
                 if (housingItem.ItemStruct == IntPtr.Zero)
                 {
@@ -440,7 +492,7 @@ namespace MakePlacePlugin.Gui
 
             if (Memory.Instance == null) return;
 
-            var itemList = Memory.Instance.IsOutdoors() ? Config.ExteriorItemList : Config.InteriorItemList;
+            var itemList = Memory.Instance.IsOutdoors() ? Plugin.ExteriorItemList : Plugin.InteriorItemList;
 
             for (int i = 0; i < itemList.Count(); i++)
             {

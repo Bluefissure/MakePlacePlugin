@@ -18,23 +18,17 @@ namespace MakePlacePlugin
         public List<int> GroupingList = new List<int>();
         public bool PlaceAnywhere = false;
 
-        public Layout Layout = new Layout();
-        public List<HousingItem> InteriorItemList = new List<HousingItem>();
-        public List<HousingItem> ExteriorItemList = new List<HousingItem>();
+        public bool Basement = true;
+        public bool GroundFloor = true;
+        public bool UpperFloor = true;
+
 
         public List<string> Tags = new List<string>();
         public List<bool> TagsSelectList = new List<bool>();
         public int LocationId = 0;
         public int LoadInterval = 400;
 
-
-        public float PlaceX = 0;
-        public float PlaceY = 0;
-        public float PlaceZ = 0;
-        public float PlaceRotate = 0;
-        public DateTime lastPosPackageTime = DateTime.Now;
-
-        public string SaveLocation = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).Replace('\\', '/') + "/MakePlace/save.json";
+        public string SaveLocation = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).Replace('\\', '/') + "/MakePlace/Save/save.json";
 
         #region Init and Save
 
@@ -52,10 +46,6 @@ namespace MakePlacePlugin
 
         public void ResetRecord()
         {
-            PlaceX = 0;
-            PlaceY = 0;
-            PlaceZ = 0;
-            PlaceRotate = 0;
             HiddenScreenItemHistory.Clear();
             GroupingList.Clear();
             Save();

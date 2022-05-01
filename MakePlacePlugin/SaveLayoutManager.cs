@@ -58,6 +58,8 @@ namespace MakePlacePlugin
 
         public List<SaveProperty> properties { get; set; } = new List<SaveProperty>();
 
+        public List<Furniture> attachments { get; set; } = new List<Furniture>();
+
         public Color GetColor()
         {
             foreach (var prop in properties)
@@ -101,7 +103,7 @@ namespace MakePlacePlugin
     {
         public Transform playerTransform { get; set; } = new Transform();
 
-        public string houseSize { get; set; }
+        public string houseSize { get; set; } = "";
 
         public float interiorScale { get; set; } = 1;
 
@@ -115,6 +117,17 @@ namespace MakePlacePlugin
 
         public List<Furniture> exteriorFurniture { get; set; } = new List<Furniture>();
 
+        public Dictionary<string, string> properties { get; set; } = new Dictionary<string, string>();
+
+        public bool hasBasement()
+        {
+            return houseSize.Equals("Small") || houseSize.Equals("Medium") || houseSize.Equals("Large");
+        }
+
+        public bool hasUpperFloor()
+        {
+            return houseSize.Equals("Medium") || houseSize.Equals("Large");
+        }
     }
 
 
@@ -122,13 +135,15 @@ namespace MakePlacePlugin
     {
         public ChatGui chat;
         public static Configuration Config;
+        public static MakePlacePlugin Plugin;
 
         public static List<(Color, uint)> ColorList;
 
-        public SaveLayoutManager(ChatGui chatGui, Configuration config)
+        public SaveLayoutManager(MakePlacePlugin plugin, ChatGui chatGui, Configuration config)
         {
             chat = chatGui;
             Config = config;
+            Plugin = plugin;
         }
 
         public static float layoutScale = 1;
@@ -165,32 +180,46 @@ namespace MakePlacePlugin
             return new List<float> { checkZero(q.X), checkZero(q.Y), checkZero(q.Z), checkZero(q.W) };
         }
 
+        static HousingItem ConvertToHousingItem(Furniture furniture)
+        {
+            var ItemSheet = Data.GetExcelSheet<Item>();
+            var itemRow = ItemSheet.FirstOrDefault(row => row.Name.ToString().Equals(furniture.name));
+
+            if (itemRow == null) itemRow = ItemSheet.FirstOrDefault(row => row.RowId == furniture.itemId);
+
+            if (itemRow == null) return null;
+
+            var r = furniture.transform.rotation;
+            var quat = new Quaternion(r[0], r[1], r[2], r[3]);
+
+            var houseItem = new HousingItem(
+                itemRow,
+                (byte)furniture.GetClosestStain(ColorList),
+                descale(furniture.transform.location[0]),
+                descale(furniture.transform.location[2]), // switch Y & Z axis
+                descale(furniture.transform.location[1]),
+                -QuaternionExtensions.ComputeZAngle(quat));
+
+            return houseItem;
+        }
+
 
         static void ImportFurniture(List<HousingItem> itemList, List<Furniture> furnitureList)
         {
-            var ItemSheet = Data.GetExcelSheet<Item>();
+            
 
             foreach (Furniture furniture in furnitureList)
             {
-                var itemRow = ItemSheet.FirstOrDefault(row => row.Name.ToString().Equals(furniture.name));
 
-                if (itemRow == null) itemRow = ItemSheet.FirstOrDefault(row => row.RowId == furniture.itemId);
-
-                if (itemRow == null) continue;
-
-                var r = furniture.transform.rotation;
-                var quat = new Quaternion(r[0], r[1], r[2], r[3]);
-
-                var houseItem = new HousingItem(
-                    itemRow.RowId,
-                    (byte)furniture.GetClosestStain(ColorList),
-                    descale(furniture.transform.location[0]),
-                    descale(furniture.transform.location[2]), // switch Y & Z axis
-                    descale(furniture.transform.location[1]),
-                    -QuaternionExtensions.ComputeZAngle(quat),
-                    furniture.name);
-
+                var houseItem = ConvertToHousingItem(furniture);
                 itemList.Add(houseItem);
+
+                foreach (Furniture child in furniture.attachments)
+                {
+                    var childItem = ConvertToHousingItem(child);
+                    itemList.Add(childItem);
+                }
+
             }
         }
 
@@ -208,26 +237,66 @@ namespace MakePlacePlugin
 
             foreach (var stain in StainList)
             {
-                var color = Utils.StainToVector4(stain.Color);
                 ColorList.Add((Color.FromArgb((int)stain.Color), stain.RowId));
             }
 
 
-            Config.InteriorItemList.Clear();
+            Plugin.InteriorItemList.Clear();
             layoutScale = layout.interiorScale;
-            ImportFurniture(Config.InteriorItemList, layout.interiorFurniture);
+            ImportFurniture(Plugin.InteriorItemList, layout.interiorFurniture);
 
-            Config.ExteriorItemList.Clear();
+            Plugin.ExteriorItemList.Clear();
             layoutScale = layout.exteriorScale;
-            ImportFurniture(Config.ExteriorItemList, layout.exteriorFurniture);
+            ImportFurniture(Plugin.ExteriorItemList, layout.exteriorFurniture);
 
-            Config.Layout = layout;
+            Plugin.Layout = layout;
 
+        }
+
+        public unsafe static void LoadExteriorFixtures()
+        {
+            var exterior = Plugin.Layout.exteriorFixture;
+            exterior.Clear();
+
+            if (!Memory.Instance.GetHousingController(out var controller)) return;
+
+            var mgr = Memory.Instance.HousingModule->GetCurrentManager();
+
+            var customize = controller.Houses(mgr->Plot);
+
+            var housingData = HousingData.Instance;
+
+            var roof = customize.GetPart(ExteriorPartsType.Roof);
+            if (roof.FixtureKey != 0 && housingData.IsUnitedExteriorPart(roof.FixtureKey, out var roofItem))
+            {
+                var fixture = new Fixture();
+                fixture.type = Utils.GetExteriorPartDescriptor(ExteriorPartsType.Walls);
+                fixture.name = roofItem.Name.ToString();
+                fixture.itemId = roofItem.RowId;
+                exterior.Add(fixture);
+
+            }
+            else
+            {
+                for (var i = 0; i < HouseCustomize.PartsMax; i++)
+                {
+                    var type = (ExteriorPartsType)i;
+                    var part = customize.GetPart(type);
+                    if (!housingData.TryGetItem(part.FixtureKey, out var item)) continue;
+
+                    var fixture = new Fixture();
+                    fixture.type = Utils.GetExteriorPartDescriptor(type);
+                    fixture.name = item.Name.ToString();
+                    fixture.itemId = item.RowId;
+                    exterior.Add(fixture);
+
+                }
+            }
         }
 
         public static void LoadInteriorFixtures()
         {
-            var layout = Config.Layout;
+            var layout = Plugin.Layout;
 
             layout.interiorFixture.Clear();
 
@@ -278,9 +347,6 @@ namespace MakePlacePlugin
                         break;
                 }
 
-
-
-
                 var district = new Fixture();
                 district.type = "District";
 
@@ -303,12 +369,7 @@ namespace MakePlacePlugin
                     default:
                         break;
                 }
-
-
-
                 layout.interiorFixture.Add(district);
-
-
             }
 
         }
@@ -347,13 +408,19 @@ namespace MakePlacePlugin
 
         public void ExportLayout()
         {
-            Layout save = Config.Layout;
+
+            if (Directory.Exists(Config.SaveLocation))
+            {
+                throw new Exception("Save file not specified");
+            }
+
+            Layout save = Plugin.Layout;
             save.playerTransform = new Transform();
 
             save.interiorScale = 1;
 
-            RecordFurniture(save.interiorFurniture, Config.InteriorItemList);
-            RecordFurniture(save.exteriorFurniture, Config.ExteriorItemList);
+            RecordFurniture(save.interiorFurniture, Plugin.InteriorItemList);
+            RecordFurniture(save.exteriorFurniture, Plugin.ExteriorItemList);
 
 
             var encoderSettings = new TextEncoderSettings();

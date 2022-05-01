@@ -8,6 +8,7 @@ A plugin to automatically save and load housing furniture layouts for FFXIV. It 
 * Open the settings window by using the command `/xlsettings` in the chat, or by hitting `Esc` and selecting Dalamud Settings.
 * Click on the "Experimental" tab
 * Copy the following url into a new line on the Custom Plugin Repositories section: https://raw.githubusercontent.com/jawslouis/MakePlacePlugin/master/MakePlacePlugin.json
+  - For the CN server, use this version by BlueFissure: https://cdn.jsdelivr.net/gh/Bluefissure/MakePlacePlugin@cn/MakePlacePlugin.json
 * Click on the `+` button. Make sure the new entry has "Enabled" checked.
 * Click the "Save and Close" button
 * Open the plugins window by typing `/xlplugins` in the chat, or hit `Esc` and select Dalamud Plugins
@@ -18,12 +19,20 @@ Type `/makeplace` to open the plugin screen. Most functions are only available w
 
 ![Settings](screenshot.png?raw=true)  
 
-* **Label Furniture**: Shows a small tooltip over each furniture, with a button to apply the layout position to the furniture
-* **Save**: Saves the *currently loaded* interior and exterior layout to file. You will need to load the interior/exterior layout before you can save it.
+* **Save**: Saves the *currently loaded* interior and exterior layout to file. You will need to load the interior/exterior layout before you can save it. Make sure the path contains the file name too (e.g. `save.json`)
 * **Load**: Loads the layout from the specified file. The plugin will check the currently placed furniture in the house to see if there is a match with the layout. It also checks if there is a match for the dye color. All layout furniture with no match will be grayed out.
 * **Get Interior/Exterior Layout**: Loads the current furniture layout in the house/yard. Interior and exterior layouts are loaded separately.
-* **Apply Interior/Exterior Layout**: Applies the layout position to all applicable furniture in the house/yard (those that are not grayed out). Make sure that no furniture is selected before using this.
+* **Apply Interior/Exterior Layout**: Applies the layout position to all applicable furniture in the house/yard (those that are not grayed out). **Furniture needs to be placed before it can be used in the layout** - items in the inventory or storeroom will not be used. Make sure that no furniture is selected before using this.
 * **Time Interval**: The time period between each furniture placement when applying the entire layout. Setting this too low (e.g. 200ms) may cause some furniture placements to be missed. 
+* **Label Furniture**: Shows a small tooltip over each furniture, with a button to apply the layout position to the furniture
+
+### Saving a layout from the game
+* Make sure you are in furniture mode
+* Click on `Get Interior/Exterior Layout`
+* Check the file path
+  * Make sure the folder exists
+  * Make sure the `save.json` file is specified. You can use any file name you want.
+* Click on `Save`. Done!
 
 ###
 
@@ -32,7 +41,7 @@ Type `/makeplace` to open the plugin screen. Most functions are only available w
 Create a github issue or post on the [discord channel](https://discord.gg/YuvcPzCuhq) for help with troubleshooting.
 
 ### Does the plugin work if the game is not in English?
-Saving and loading layouts will work in all languages. However, the MakePlace program only recognizes English furniture names. Please reload the client in English and save/load the layout if you want to transfer layouts to/from the MakePlace program.
+Yes! Saving, loading, and transferring layouts will work in all languages.
 
 ### Can I use this to copy layouts from other houses?
 No. You can only load layouts when in furniture layout mode, in your own house.

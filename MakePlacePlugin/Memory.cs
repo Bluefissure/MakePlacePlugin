@@ -29,8 +29,6 @@ namespace MakePlacePlugin
                     scanner.GetStaticAddressFromSig(
                         "48 8B 05 ?? ?? ?? ?? 48 8B 48 20 48 85 C9 74 31 83 B9 ?? ?? ?? ?? ?? 74 28 80 B9 ?? ?? ?? ?? ?? 75 1F 80 B9 ?? ?? ?? ?? ?? 74 03 B0 01 C3", 2);
 
-                HousingModulePtr = Marshal.ReadIntPtr(HousingModulePtr);
-                LayoutWorldPtr = Marshal.ReadIntPtr(LayoutWorldPtr);
 
                 InventoryManagerAddress = scanner.GetStaticAddressFromSig("BA ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B F8 48 85 C0");
                 var getInventoryContainerPtr = scanner.ScanText("E8 ?? ?? ?? ?? 8B 55 BB");
@@ -48,8 +46,8 @@ namespace MakePlacePlugin
         private IntPtr HousingModulePtr { get; }
         private IntPtr LayoutWorldPtr { get; }
 
-        public unsafe HousingModule* HousingModule => (HousingModule*)HousingModulePtr;
-        public unsafe LayoutWorld* LayoutWorld => (LayoutWorld*)LayoutWorldPtr;
+        public unsafe HousingModule* HousingModule => HousingModulePtr != IntPtr.Zero ? (HousingModule*)Marshal.ReadIntPtr(HousingModulePtr) : null;
+        public unsafe LayoutWorld* LayoutWorld => LayoutWorldPtr != IntPtr.Zero ? (LayoutWorld*)Marshal.ReadIntPtr(LayoutWorldPtr) : null;
         public unsafe HousingObjectManager* CurrentManager => HousingModule->currentTerritory;
         public unsafe HousingStructure* HousingStructure => LayoutWorld->HousingStruct;
 
@@ -138,22 +136,6 @@ namespace MakePlacePlugin
             return ret;
         }
 
-        public unsafe bool TryGetHousingGameObject(int index, out HousingGameObject? gameObject)
-        {
-            gameObject = null;
-            if (HousingModule == null ||
-                HousingModule->GetCurrentManager() == null ||
-                HousingModule->GetCurrentManager()->Objects == null)
-                return false;
-
-            if (HousingModule->GetCurrentManager()->Objects[index] == 0)
-                return false;
-
-            gameObject = *(HousingGameObject*)HousingModule->GetCurrentManager()->Objects[index];
-
-            return true;
-        }
-
         public unsafe List<HousingGameObject> GetExteriorPlacedObjects()
         {
 
@@ -166,6 +148,8 @@ namespace MakePlacePlugin
 
             var exteriorItems = Memory.GetContainer(InventoryType.HousingExteriorPlacedItems);
 
+            if (exteriorItems == null) throw new Exception("Unable to get inventory for exterior");
+
             var placedObjects = new List<HousingGameObject>();
 
             for (int i = 0; i < exteriorItems->Size; i++)
@@ -173,16 +157,22 @@ namespace MakePlacePlugin
                 var item = exteriorItems->GetInventorySlot(i);
                 if (item == null || item->ItemID == 0) continue;
 
-                var itemInfo = HousingObjectManager.GetItemInfo(mgr, i);
+                var itemInfoIndex = GetYardIndex(mgr->Plot, (byte)i);
+                var itemInfo = HousingObjectManager.GetItemInfo(mgr, itemInfoIndex);
+
+                if (itemInfo == null) continue;
 
                 var gameObj = (HousingGameObject*)GetObjectFromIndex(activeObjList, itemInfo->ObjectIndex);
 
                 if (gameObj == null)
                 {
-                    gameObj = (HousingGameObject*)GetGameObject(objectListAddr, (ushort)(i + 20));
+                    gameObj = (HousingGameObject*)GetGameObject(objectListAddr, itemInfoIndex);
                 }
 
-                placedObjects.Add(*gameObj);
+                if (gameObj != null)
+                {
+                    placedObjects.Add(*gameObj);
+                }
             }
 
 
@@ -215,38 +205,15 @@ namespace MakePlacePlugin
                     string name1 = "", name2 = "";
                     if (HousingData.Instance.TryGetFurniture(obj1.housingRowId, out var furniture1))
                         name1 = furniture1.Item.Value.Name.ToString();
-                    else if (HousingData.Instance.TryGetYardObject(obj1.housingRowId, out var yardObject1))
-                        name1 = yardObject1.Item.Value.Name.ToString();
+
                     if (HousingData.Instance.TryGetFurniture(obj2.housingRowId, out var furniture2))
                         name2 = furniture2.Item.Value.Name.ToString();
-                    else if (HousingData.Instance.TryGetYardObject(obj2.housingRowId, out var yardObject2))
-                        name2 = yardObject2.Item.Value.Name.ToString();
 
                     return string.Compare(name1, name2, StringComparison.Ordinal);
                 });
             return true;
         }
 
-        public unsafe bool TryGetUnsortedHousingGameObjectList(out List<HousingGameObject> objects)
-        {
-            objects = null;
-            if (HousingModule == null ||
-                HousingModule->GetCurrentManager() == null ||
-                HousingModule->GetCurrentManager()->Objects == null)
-                return false;
-
-            objects = new List<HousingGameObject>();
-            for (var i = 0; i < 400; i++)
-            {
-                var oPtr = HousingModule->GetCurrentManager()->Objects[i];
-                if (oPtr == 0)
-                    continue;
-                var o = *(HousingGameObject*)oPtr;
-                objects.Add(o);
-            }
-
-            return true;
-        }
 
         public unsafe bool GetActiveLayout(out LayoutManager manager)
         {
