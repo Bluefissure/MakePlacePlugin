@@ -1,6 +1,6 @@
 # MakePlace Plugin
 
-**This branch is for Dalamud API4 / HXD only**
+**This branch is for Dalamud API5 / CN only**
 
 A plugin to automatically save and load housing furniture layouts for FFXIV. It can also import/export layouts from the [MakePlace](https://jawslouis.itch.io/makeplace) program since it uses the same file format.
 
